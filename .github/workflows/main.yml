@@ -18,27 +18,30 @@ jobs:
         with:
           arch: x64
 
-      # 1. Генерируем .lib файл из .def (если тебе нужно линковаться с ним самим собой, 
-      # хотя обычно для прокси достаточно cl /LD с правильным кодом)
-      - name: Generate import library from DEF
+      # 1. Генерируем временную библиотеку импорта из DEF-файла.
+      # Используем уникальное имя 'proxy_exports.lib', чтобы избежать ошибки LNK1149
+      - name: Generate Proxy Library
         shell: cmd
         run: |
-          lib /def:steam_api64.def /out:steam_api64.lib /machine:x64
+          lib /def:steam_api64.def /out:proxy_exports.lib /machine:x64
 
-      # 2. Сборка DLL. 
-      # Добавлен флаг /LTCG (Link Time Code Generation) для MinHook
-      # Добавлен флаг /link /LTCG для линковщика
+      # 2. Компиляция и линковка.
+      # /MT - статическая линковка рантайма (чтобы DLL работала без установки VCRedist)
+      # /GL и /LTCG - необходимы для корректной работы с либой MinHook
       - name: Compile and Link DLL
         shell: cmd
         run: |
-          cl /LD /EHsc /std:c++17 /O2 /GL main.cpp ^
+          cl /LD /EHsc /MT /std:c++17 /O2 /GL main.cpp ^
           /Fe:steam_api64.dll ^
-          steam_api64.lib ^
+          proxy_exports.lib ^
           /link /LTCG ^
           libMinHook.x64.lib kernel32.lib user32.lib
 
+      # 3. Сохранение результата
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: steam_api64_dll
-          path: steam_api64.dll
+          name: steam_api64_proxy
+          path: |
+            steam_api64.dll
+            steam_api64.lib
