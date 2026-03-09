@@ -1,38 +1,43 @@
-name: Build MSVC DLL
+name: Build Steam Proxy DLL
 
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
-      # 1. Клонируем репозиторий
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Настраиваем окружение MSVC (cl.exe, link.exe и т.д.)
-      - name: Setup MSVC Developer Command Prompt
+      - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
         with:
           arch: x64
 
-      # 3. Запуск компиляции
-      - name: Compile DLL
+      # 1. Генерируем .lib файл из .def (если тебе нужно линковаться с ним самим собой, 
+      # хотя обычно для прокси достаточно cl /LD с правильным кодом)
+      - name: Generate import library from DEF
         shell: cmd
         run: |
-          cl /LD /EHsc /std:c++17 /O2 main.cpp ^
-          /Fe:steam_api64.dll ^
-          /link /DEF:steam_api64.def ^
-          libMinHook.x64.lib kernel32.lib
+          lib /def:steam_api64.def /out:steam_api64.lib /machine:x64
 
-      # 4. Сохранение готового файла как артефакта
-      - name: Upload Build Artifact
+      # 2. Сборка DLL. 
+      # Добавлен флаг /LTCG (Link Time Code Generation) для MinHook
+      # Добавлен флаг /link /LTCG для линковщика
+      - name: Compile and Link DLL
+        shell: cmd
+        run: |
+          cl /LD /EHsc /std:c++17 /O2 /GL main.cpp ^
+          /Fe:steam_api64.dll ^
+          /link /DEF:steam_api64.def /LTCG ^
+          libMinHook.x64.lib kernel32.lib user32.lib
+
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: steam_api64-dll
+          name: steam_api64_dll
           path: steam_api64.dll
