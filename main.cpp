@@ -80,15 +80,17 @@ static AppId_t (*orig_vt_ISteamUser_GetAppID)(void*)           = nullptr;   // n
 // =============================================================================
 //  MinHook trampoline pointers for flat (C-linkage) API hooks
 // =============================================================================
-using fn_SteamAPI_Init                 = bool  (__cdecl*)();
-using fn_SteamAPI_ISteamUtils_GetAppID = AppId_t(__cdecl*)(void*);
-using fn_SteamAPI_ISteamUser_GetAppID  = AppId_t(__cdecl*)(void*);
-using fn_SteamInternal_CreateInterface = void*  (__cdecl*)(const char*);
+using fn_SteamAPI_Init                        = bool  (__cdecl*)();
+using fn_SteamAPI_RestartAppIfNecessary       = bool  (__cdecl*)(AppId_t);
+using fn_SteamAPI_ISteamUtils_GetAppID        = AppId_t(__cdecl*)(void*);
+using fn_SteamAPI_ISteamUser_GetAppID         = AppId_t(__cdecl*)(void*);
+using fn_SteamInternal_CreateInterface        = void*  (__cdecl*)(const char*);
 
-static fn_SteamAPI_Init                 orig_SteamAPI_Init                 = nullptr;
-static fn_SteamAPI_ISteamUtils_GetAppID orig_SteamAPI_ISteamUtils_GetAppID = nullptr;
-static fn_SteamAPI_ISteamUser_GetAppID  orig_SteamAPI_ISteamUser_GetAppID  = nullptr;
-static fn_SteamInternal_CreateInterface orig_SteamInternal_CreateInterface = nullptr;
+static fn_SteamAPI_Init                  orig_SteamAPI_Init                  = nullptr;
+static fn_SteamAPI_RestartAppIfNecessary orig_SteamAPI_RestartAppIfNecessary = nullptr;
+static fn_SteamAPI_ISteamUtils_GetAppID  orig_SteamAPI_ISteamUtils_GetAppID  = nullptr;
+static fn_SteamAPI_ISteamUser_GetAppID   orig_SteamAPI_ISteamUser_GetAppID   = nullptr;
+static fn_SteamInternal_CreateInterface  orig_SteamInternal_CreateInterface  = nullptr;
 
 
 // =============================================================================
@@ -347,6 +349,16 @@ static void SetupSteamEnvironment()
 //  Flat API detour implementations
 // =============================================================================
 
+// ── SteamAPI_RestartAppIfNecessary ───────────────────────────────────────────
+//  The Forest (Unity) calls this immediately on startup.
+//  Original: returns true → "relaunch via Steam" → process exits immediately.
+//  We always return false so the game continues initialising normally.
+static bool __cdecl Detour_SteamAPI_RestartAppIfNecessary(AppId_t unOwnAppID)
+{
+    (void)unOwnAppID;
+    return false;   // "No restart needed" — let the game proceed
+}
+
 // ── SteamAPI_Init ────────────────────────────────────────────────────────────
 static bool __cdecl Detour_SteamAPI_Init()
 {
@@ -411,6 +423,11 @@ struct HookEntry
 
 static const HookEntry k_hooks[] =
 {
+    {
+        "SteamAPI_RestartAppIfNecessary",
+        reinterpret_cast<void*>(&Detour_SteamAPI_RestartAppIfNecessary),
+        reinterpret_cast<void**>(&orig_SteamAPI_RestartAppIfNecessary)
+    },
     {
         "SteamAPI_Init",
         reinterpret_cast<void*>(&Detour_SteamAPI_Init),
