@@ -617,12 +617,12 @@ EXPORTS
     SteamAPI_ISteamUtils_ShowGamepadTextInput=steam_api64_o.SteamAPI_ISteamUtils_ShowGamepadTextInput @614
     SteamAPI_ISteamVideo_GetVideoURL=steam_api64_o.SteamAPI_ISteamVideo_GetVideoURL @615
     SteamAPI_ISteamVideo_IsBroadcasting=steam_api64_o.SteamAPI_ISteamVideo_IsBroadcasting @616
-    SteamAPI_Init=steam_api64_o.SteamAPI_Init @617
-    SteamAPI_InitSafe=steam_api64_o.SteamAPI_InitSafe @618
+    SteamAPI_Init @617
+    SteamAPI_InitSafe @618
     SteamAPI_IsSteamRunning=steam_api64_o.SteamAPI_IsSteamRunning @619
     SteamAPI_RegisterCallResult=steam_api64_o.SteamAPI_RegisterCallResult @620
     SteamAPI_RegisterCallback=steam_api64_o.SteamAPI_RegisterCallback @621
-    SteamAPI_RestartAppIfNecessary=steam_api64_o.SteamAPI_RestartAppIfNecessary @622
+    SteamAPI_RestartAppIfNecessary @622
     SteamAPI_RunCallbacks=steam_api64_o.SteamAPI_RunCallbacks @623
     SteamAPI_SetBreakpadAppID=steam_api64_o.SteamAPI_SetBreakpadAppID @624
     SteamAPI_SetMiniDumpComment=steam_api64_o.SteamAPI_SetMiniDumpComment @625
@@ -716,7 +716,7 @@ EXPORTS
     SteamGameServer_GetHSteamUser=steam_api64_o.SteamGameServer_GetHSteamUser @713
     SteamGameServer_GetIPCCallCount=steam_api64_o.SteamGameServer_GetIPCCallCount @714
     SteamGameServer_GetSteamID=steam_api64_o.SteamGameServer_GetSteamID @715
-    SteamGameServer_Init=steam_api64_o.SteamGameServer_Init @716
+    SteamGameServer_Init @716
     SteamGameServer_InitSafe=steam_api64_o.SteamGameServer_InitSafe @717
     SteamGameServer_RunCallbacks=steam_api64_o.SteamGameServer_RunCallbacks @718
     SteamGameServer_Shutdown=steam_api64_o.SteamGameServer_Shutdown @719
@@ -748,4 +748,5 @@ EXPORTS
     g_pSteamClientGameServer=steam_api64_o.g_pSteamClientGameServer @745
     SteamInternal_CreateInterface=steam_api64_o.SteamInternal_CreateInterface @746
     SteamInternal_FindOrCreateUserInterface=steam_api64_o.SteamInternal_FindOrCreateUserInterface @747
+
     SteamInternal_FindOrCreateGameServerInterface=steam_api64_o.SteamInternal_FindOrCreateGameServerInterface @748
