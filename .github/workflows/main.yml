@@ -33,7 +33,8 @@ jobs:
         run: |
           cl /LD /EHsc /std:c++17 /O2 /GL main.cpp ^
           /Fe:steam_api64.dll ^
-          /link /DEF:steam_api64.def /LTCG ^
+          steam_api64.lib ^
+          /link /LTCG ^
           libMinHook.x64.lib kernel32.lib user32.lib
 
       - name: Upload Artifact
