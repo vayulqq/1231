@@ -1,0 +1,37 @@
+name: Build MSVC DLL
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      # 1. Клонируем репозиторий
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Настраиваем окружение MSVC (cl.exe, link.exe и т.д.)
+      - name: Setup MSVC Developer Command Prompt
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      # 3. Запуск компиляции
+      - name: Compile DLL
+        run: |
+          cl /LD /EHsc /std:c++17 /O2 main.cpp ^
+          /Fe:steam_api64.dll ^
+          /link /DEF:steam_api64.def ^
+          libMinHook.x64.lib kernel32.lib
+
+      # 4. Сохранение готового файла как артефакта
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: steam_api64-dll
+          path: steam_api64.dll
