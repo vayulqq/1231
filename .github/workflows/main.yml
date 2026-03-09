@@ -23,6 +23,7 @@ jobs:
 
       # 3. Запуск компиляции
       - name: Compile DLL
+        shell: cmd
         run: |
           cl /LD /EHsc /std:c++17 /O2 main.cpp ^
           /Fe:steam_api64.dll ^
