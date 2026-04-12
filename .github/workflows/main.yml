@@ -168,12 +168,13 @@ jobs:
           done
 
       # ── 8. Zip everything up ───────────────────────────────────────────
+      # PowerShell гарантированно есть на windows-latest, не требует установки
       - name: Zip bundle
+        shell: pwsh
         run: |
-          cd dist
-          zip -r ../gtk4-demo-windows-x64.zip . -q
-          cd ..
-          echo "Archive size: $(du -sh gtk4-demo-windows-x64.zip | cut -f1)"
+          Compress-Archive -Path dist\* -DestinationPath gtk4-demo-windows-x64.zip
+          $size = (Get-Item gtk4-demo-windows-x64.zip).Length / 1MB
+          Write-Host ("Archive size: {0:F1} MB" -f $size)
 
       # ── 9. Upload artifact ────────────────────────────────────────────
       - name: Upload artifact
