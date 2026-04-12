@@ -171,7 +171,7 @@ jobs:
       - name: Zip bundle
         run: |
           cd dist
-          7z a -tzip ../gtk4-demo-windows-x64.zip . > /dev/null
+          zip -r ../gtk4-demo-windows-x64.zip . -q
           cd ..
           echo "Archive size: $(du -sh gtk4-demo-windows-x64.zip | cut -f1)"
 
