@@ -106,49 +106,65 @@ jobs:
           find dist -maxdepth 1 -name '*.dll' | sort
 
       # ── 7. Bundle GTK runtime data ─────────────────────────────────────
-      # Icons, themes, loaders, immodules, etc.
       - name: Bundle GTK runtime assets
         run: |
-          MINGW_ROOT="/${MINGW_PREFIX}"
+          # cygpath даёт правильный POSIX-путь независимо от MINGW_PREFIX
+          MINGW_ROOT="$(cygpath -u "$(cygpath -w /mingw64)")"
+          echo "MINGW_ROOT=$MINGW_ROOT"
 
-          # GDK pixbuf loaders
-          mkdir -p dist/lib/gdk-pixbuf-2.0
-          cp -r "$MINGW_ROOT/lib/gdk-pixbuf-2.0/." dist/lib/gdk-pixbuf-2.0/
+          copy_dir() {
+            local src="$1" dst="$2"
+            if [ -d "$src" ]; then
+              mkdir -p "$dst"
+              cp -r "$src/." "$dst/"
+              echo "  copied: $src"
+            else
+              echo "  skip (not found): $src"
+            fi
+          }
 
-          # GTK4 print backends / immodules (if present)
-          GTK_VER=$(pkg-config --modversion gtk4 | cut -d. -f1,2)
-          if [ -d "$MINGW_ROOT/lib/gtk-4.0" ]; then
-            mkdir -p dist/lib/gtk-4.0
-            cp -r "$MINGW_ROOT/lib/gtk-4.0/." dist/lib/gtk-4.0/
-          fi
+          copy_file() {
+            local src="$1" dst="$2"
+            if [ -f "$src" ]; then
+              mkdir -p "$(dirname "$dst")"
+              cp "$src" "$dst"
+              echo "  copied: $src"
+            else
+              echo "  skip (not found): $src"
+            fi
+          }
 
-          # Icon themes (at minimum hicolor)
+          # GDK-Pixbuf loaders
+          copy_dir "$MINGW_ROOT/lib/gdk-pixbuf-2.0" "dist/lib/gdk-pixbuf-2.0"
+
+          # GTK4 backends
+          copy_dir "$MINGW_ROOT/lib/gtk-4.0" "dist/lib/gtk-4.0"
+
+          # Icon themes
           mkdir -p dist/share/icons
           for theme in hicolor Adwaita; do
-            if [ -d "$MINGW_ROOT/share/icons/$theme" ]; then
-              cp -r "$MINGW_ROOT/share/icons/$theme" dist/share/icons/
-            fi
+            copy_dir "$MINGW_ROOT/share/icons/$theme" "dist/share/icons/$theme"
           done
 
-          # Default GTK theme
+          # GTK themes
           mkdir -p dist/share/themes
           for theme in Default Adwaita; do
-            if [ -d "$MINGW_ROOT/share/themes/$theme" ]; then
-              cp -r "$MINGW_ROOT/share/themes/$theme" dist/share/themes/
-            fi
+            copy_dir "$MINGW_ROOT/share/themes/$theme" "dist/share/themes/$theme"
           done
 
-          # GLib schemas
-          mkdir -p dist/share/glib-2.0/schemas
-          cp "$MINGW_ROOT/share/glib-2.0/schemas/gschemas.compiled" \
-             dist/share/glib-2.0/schemas/ 2>/dev/null || true
+          # GLib compiled schemas
+          copy_file \
+            "$MINGW_ROOT/share/glib-2.0/schemas/gschemas.compiled" \
+            "dist/share/glib-2.0/schemas/gschemas.compiled"
 
-          # locale / gettext (optional but avoids GTK warnings)
+          # GTK translations
           mkdir -p dist/share/locale
           for mo in "$MINGW_ROOT/share/locale/"*/LC_MESSAGES/gtk40.mo; do
-            lang=$(echo "$mo" | sed "s|$MINGW_ROOT/share/locale/||;s|/.*||")
+            [ -f "$mo" ] || continue
+            lang="${mo#$MINGW_ROOT/share/locale/}"
+            lang="${lang%%/*}"
             mkdir -p "dist/share/locale/$lang/LC_MESSAGES"
-            cp "$mo" "dist/share/locale/$lang/LC_MESSAGES/" 2>/dev/null || true
+            cp "$mo" "dist/share/locale/$lang/LC_MESSAGES/gtk40.mo"
           done
 
       # ── 8. Zip everything up ───────────────────────────────────────────
