@@ -1,0 +1,190 @@
+# .github/workflows/build-windows.yml
+#
+# Builds gtk4-demo as a self-contained Windows executable.
+# Strategy:
+#   • MSYS2 + MinGW-w64 toolchain
+#   • GTK4 and all deps compiled with -static / static pkgconfig
+#   • windeployqt-style bundling replaced by manual DLL copy via
+#     "bundledlls" or a simple ldd-based collector
+#   • Artifact: a zip with the .exe + required DLLs/themes/icons
+#
+# NOTE: GTK4 does not support true all-in-one static linking on Windows
+# (glib, pango, cairo, etc. require separate .dll or .a files that still
+# need to ship together).  The workflow below produces a *portable* bundle
+# (exe + DLLs) rather than a single monolithic .exe, which is the standard
+# shipping format for GTK/Windows applications.
+
+name: Build (Windows, portable bundle)
+
+on:
+  push:
+    branches: [main, master]
+    tags:     ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  MSYS2_ARCH:   x86_64
+  MINGW_PREFIX: mingw64
+  # pkg-config prefix inside MSYS2
+  PKG: mingw-w64-x86_64
+
+jobs:
+  build-windows:
+    name: Windows portable build
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        # Every step runs inside an MSYS2 shell
+        shell: msys2 {0}
+
+    steps:
+      # ── 1. Check out source ────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Set up MSYS2 + MinGW-w64 toolchain ─────────────────────────
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem:  MINGW64
+          update:   true
+          install: >-
+            ${{ env.PKG }}-gcc
+            ${{ env.PKG }}-pkg-config
+            ${{ env.PKG }}-meson
+            ${{ env.PKG }}-ninja
+            ${{ env.PKG }}-gtk4
+            ${{ env.PKG }}-gettext-tools
+
+      # ── 3. Configure with Meson ────────────────────────────────────────
+      - name: Meson configure
+        run: |
+          meson setup builddir \
+            --buildtype=release \
+            --strip \
+            -Db_lto=true
+
+      # ── 4. Compile ─────────────────────────────────────────────────────
+      - name: Meson compile
+        run: meson compile -C builddir
+
+      # ── 5. Collect the executable ──────────────────────────────────────
+      - name: Stage artifact directory
+        run: |
+          mkdir -p dist
+          cp builddir/gtk4-demo.exe dist/
+
+      # ── 6. Bundle all required DLLs ────────────────────────────────────
+      # ldd lists dependencies; we grab every DLL that lives under the
+      # MSYS2/MinGW prefix so that the bundle is self-contained.
+      - name: Bundle DLLs
+        run: |
+          MINGW_ROOT="/${MINGW_PREFIX}"
+
+          collect_dlls() {
+            local exe="$1"
+            ldd "$exe" 2>/dev/null \
+              | grep -i "$MINGW_ROOT" \
+              | awk '{print $3}' \
+              | xargs -I{} cp -n {} dist/ 2>/dev/null || true
+          }
+
+          collect_dlls dist/gtk4-demo.exe
+
+          # Iterate over newly copied DLLs until no new ones appear
+          prev=0
+          while : ; do
+            count=$(ls dist/*.dll 2>/dev/null | wc -l)
+            [ "$count" -eq "$prev" ] && break
+            prev=$count
+            for dll in dist/*.dll; do
+              collect_dlls "$dll"
+            done
+          done
+
+          echo "Bundled DLLs:"
+          ls dist/*.dll
+
+      # ── 7. Bundle GTK runtime data ─────────────────────────────────────
+      # Icons, themes, loaders, immodules, etc.
+      - name: Bundle GTK runtime assets
+        run: |
+          MINGW_ROOT="/${MINGW_PREFIX}"
+
+          # GDK pixbuf loaders
+          mkdir -p dist/lib/gdk-pixbuf-2.0
+          cp -r "$MINGW_ROOT/lib/gdk-pixbuf-2.0/." dist/lib/gdk-pixbuf-2.0/
+
+          # GTK4 print backends / immodules (if present)
+          GTK_VER=$(pkg-config --modversion gtk4 | cut -d. -f1,2)
+          if [ -d "$MINGW_ROOT/lib/gtk-4.0" ]; then
+            mkdir -p dist/lib/gtk-4.0
+            cp -r "$MINGW_ROOT/lib/gtk-4.0/." dist/lib/gtk-4.0/
+          fi
+
+          # Icon themes (at minimum hicolor)
+          mkdir -p dist/share/icons
+          for theme in hicolor Adwaita; do
+            if [ -d "$MINGW_ROOT/share/icons/$theme" ]; then
+              cp -r "$MINGW_ROOT/share/icons/$theme" dist/share/icons/
+            fi
+          done
+
+          # Default GTK theme
+          mkdir -p dist/share/themes
+          for theme in Default Adwaita; do
+            if [ -d "$MINGW_ROOT/share/themes/$theme" ]; then
+              cp -r "$MINGW_ROOT/share/themes/$theme" dist/share/themes/
+            fi
+          done
+
+          # GLib schemas
+          mkdir -p dist/share/glib-2.0/schemas
+          cp "$MINGW_ROOT/share/glib-2.0/schemas/gschemas.compiled" \
+             dist/share/glib-2.0/schemas/ 2>/dev/null || true
+
+          # locale / gettext (optional but avoids GTK warnings)
+          mkdir -p dist/share/locale
+          for mo in "$MINGW_ROOT/share/locale/"*/LC_MESSAGES/gtk40.mo; do
+            lang=$(echo "$mo" | sed "s|$MINGW_ROOT/share/locale/||;s|/.*||")
+            mkdir -p "dist/share/locale/$lang/LC_MESSAGES"
+            cp "$mo" "dist/share/locale/$lang/LC_MESSAGES/" 2>/dev/null || true
+          done
+
+      # ── 8. Write a thin launcher batch file (optional convenience) ─────
+      - name: Create launcher script
+        run: |
+          cat > dist/run.bat <<'BAT'
+          @echo off
+          cd /d "%~dp0"
+          set GDK_PIXBUF_MODULE_FILE=%~dp0lib\gdk-pixbuf-2.0\2.10.0\loaders.cache
+          set XDG_DATA_DIRS=%~dp0share
+          start "" "%~dp0gtk4-demo.exe"
+          BAT
+
+      # ── 9. Zip everything up ───────────────────────────────────────────
+      - name: Zip bundle
+        run: |
+          cd dist
+          7z a -tzip ../gtk4-demo-windows-x64.zip . > /dev/null
+          cd ..
+          echo "Archive size: $(du -sh gtk4-demo-windows-x64.zip | cut -f1)"
+
+      # ── 10. Upload artifact ────────────────────────────────────────────
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gtk4-demo-windows-x64
+          path: gtk4-demo-windows-x64.zip
+          retention-days: 30
+
+      # ── 11. Create GitHub Release (on tag push only) ───────────────────
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: gtk4-demo-windows-x64.zip
+          generate_release_notes: true
